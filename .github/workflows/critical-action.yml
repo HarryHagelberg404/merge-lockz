@@ -1,0 +1,146 @@
+name: critical-action
+
+on:
+  workflow_dispatch:
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        token: ${{secrets.GITHUB_TOKEN}}
+
+    - name: Check for existing workflow runs
+      uses: actions/github-script@v7
+      id: check_concurrent_runs
+      with:
+        script: |
+          const criticalWorkflowFiles = ['critical-action.yml'];
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const currentRunId = context.runId;
+
+          core.info(`Checking for concurrent runs of workflows: ${criticalWorkflowFiles.join(', ')}`);
+          core.info(`Current run ID: ${currentRunId}`);
+
+          try {
+            for (const workflowFile of criticalWorkflowFiles) {
+              core.info(`Checking workflow: ${workflowFile}`);
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                owner: owner,
+                repo: repo,
+                workflow_id: workflowFile,
+                status: 'in_progress,queued',
+              });
+
+              core.info(`Found ${runs.length} active/queued runs for ${workflowFile}.`);
+              for (const run of runs) {
+                if (run.id !== currentRunId) {
+                  core.warning(`Found concurrent run: ID=${run.id}, Workflow=${workflowFile}, Status=${run.status}, URL=${run.html_url}`);
+                  concurrentRun = run;
+                  break;
+                } else {
+                  core.info(` - Run ${run.id} (this run) - Skipping`);
+                }
+              }
+              if (concurrentRun) break;
+            }
+
+            if (concurrentRun) {
+              core.setFailed(`Aborting workflow because another critical workflow instance (Run ID: ${concurrentRun.id}, Workflow: ${concurrentRun.workflow_id}) is already running or queued. See: ${concurrentRun.html_url}`);
+              return;
+            }
+
+            core.info('No concurrent critical runs found. Proceeding.');
+
+          } catch (error) {
+            core.error(`Error checking for workflow runs: ${error}`);
+            core.setFailed(`Failed to check for concurrent workflow runs: ${error.message}`);
+          }
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Pending Merge Lock Check
+      id: create_merge_lock
+      uses: actions/github-script@v7
+      with:
+        # Use PR head SHA, otherwise commit SHA
+        script: |
+          const checkName = 'merge-lock-critical-workflow';
+          console.log(`Creating pending check run: ${checkName}`);
+          const response = await github.rest.checks.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            name: checkName,
+            head_sha: context.payload.pull_request?.head.sha || context.sha,
+            status: 'in_progress',
+            output: {
+              title: 'Critical Workflow Running',
+              summary: 'Merges are temporarily blocked while this critical workflow runs.'
+            }
+          });
+          console.log(`Check run created with ID: ${response.data.id}`);
+          return response.data.id
+        # Needs checks write perm
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node
+      uses: actions/setup-node@v2
+      with:
+        node-version: '20.x'
+        registry-url: 'https://registry.npmjs.org'
+        always-auth: true
+
+    - name: Pause for 60 seconds to allow merge lock check
+      run: |
+        echo "Workflow paused for 60 seconds."
+        echo "Go to a Pull Request targeting the protected branch."
+        echo "The 'merge-lock-critical-workflows' status check should be yellow (pending)."
+        echo "The merge button should be disabled or indicate the check needs to pass."
+        sleep 60
+        echo "Resuming workflow..."
+      shell: bash
+
+    - name: Update Merge Lock Check to Success
+      uses: actions/github-script@v7
+      # Use always() so runs if previous steps fail and only run if lock was created
+      if: always() && steps.create_merge_lock.outputs.result
+      with:
+        # Even if the workflow failed, the *lock* is released.
+        # Mark as success to unblock the merge check.
+        script: |
+          const checkRunId = ${{ steps.create_merge_lock.outputs.result }};
+          const conclusion = '${{ job.status }}' === 'success' ? 'success' : 'neutral';
+          const checkName = 'merge-lock-critical-workflow';
+
+          if (!checkRunId) {
+            console.log('Could not find check run ID. Skipping update.');
+            return;
+          }
+
+          console.log(`Updating check run ID: ${checkRunId} to conclusion: ${conclusion}`);
+
+          await github.rest.checks.update({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            check_run_id: checkRunId,
+            status: 'completed',
+            conclusion: 'success',
+            output: {
+              title: 'Critical Workflow Finished',
+              summary: `Workflow completed with status: ${{ job.status }}. Merge lock released.`
+            }
+          });
+          console.log('Check run updated.');
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
