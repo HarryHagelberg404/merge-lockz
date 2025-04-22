@@ -2,6 +2,8 @@ name: critical-action
 
 on:
   workflow_dispatch:
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   checks: write
@@ -9,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  merge-lock-critical-workflow:
+  publish:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
