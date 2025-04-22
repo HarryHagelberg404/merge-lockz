@@ -113,7 +113,7 @@ jobs:
       if: always() && steps.create_merge_lock.outputs.result
       with:
         script: |
-          const checkName = 'merge-lock-critical-workflows'; // Ensure this matches Create step & Branch Protection
+          const checkName = 'merge-lock-critical-workflow'; // Ensure this matches Create step & Branch Protection
           const checkRunId_raw = '${{ steps.create_merge_lock.outputs.result }}';
           const jobStatus = '${{ job.status }}';
           const owner = context.repo.owner;
