@@ -17,7 +17,7 @@ jobs:
 
       - name: Lock Branch 🔒
         env:
-          GH_TOKEN: ${{ secrets.ADMIN_PAT }}
+          GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           BRANCH_NAME: main # Or your target branch
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
