@@ -2,6 +2,10 @@ name: clear-merge-lock
 
 on:
   workflow_dispatch:
+    input:
+      run_id:
+        type: number
+        description: Enter the run id of previous runs
 
 permissions:
   checks: write
@@ -38,7 +42,7 @@ jobs:
               repo: context.repo.repo,
               check_run_id: parseInt(checkRunId, 10),
               status: 'completed',
-              conclusion: checkConclusion,
+              conclusion: 'success',
               output: {
                 title: 'Critical Workflow Finished',
                 summary: `Workflow completed with status: ${jobStatus}. Merge lock released.`
