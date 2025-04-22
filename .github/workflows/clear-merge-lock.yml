@@ -16,7 +16,7 @@ jobs:
     - name: Update Merge Lock Check to Success
       uses: actions/github-script@v7
       # Use always() so runs if previous steps fail and only run if lock was created
-      if: always() && steps.create_merge_lock.outputs.result
+      if: always()
       with:
         # Even if the workflow failed, the *lock* is released.
         # Mark as success to unblock the merge check.
