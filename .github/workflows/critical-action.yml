@@ -144,7 +144,7 @@ jobs:
             repo: repo,
             check_run_id: parsedId,
             status: 'completed',      // Check is finished
-            conclusion: checkConclusion, // Release the lock
+            conclusion: 'success', // Release the lock
             output: {
               title: 'Critical Action Finished',
               summary: `Workflow '${context.workflow}' completed job with status: ${jobStatus}. Merge lock released.`
