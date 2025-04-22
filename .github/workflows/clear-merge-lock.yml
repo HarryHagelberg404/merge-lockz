@@ -21,16 +21,16 @@ jobs:
         # Even if the workflow failed, the *lock* is released.
         # Mark as success to unblock the merge check.
         script: |
-          const checkRunId = ${{ steps.create_merge_lock.outputs.result }};
-          const conclusion = '${{ job.status }}' === 'success' ? 'success' : 'neutral';
-          const checkName = 'merge-lock-critical-workflow';
+          const checkRunId = ${{ steps.create_merge_lock.outputs.result }}
+          const conclusion = '${{ job.status }}' === 'success' ? 'success' : 'neutral'
+          const checkName = 'merge-lock-critical-workflow'
 
           if (!checkRunId) {
-            console.log('Could not find check run ID. Skipping update.');
-            return;
+            console.log('Could not find check run ID. Skipping update.')
+            return
           }
 
-          console.log(`Updating check run ID: ${checkRunId} to conclusion: ${conclusion}`);
+          console.log(`Updating check run ID: ${checkRunId} to conclusion: ${conclusion}`)
 
           await github.rest.checks.update({
             owner: context.repo.owner,
@@ -42,8 +42,8 @@ jobs:
               title: 'Critical Workflow Finished',
               summary: `Workflow completed with status: ${{ job.status }}. Merge lock released.`
             }
-          });
-          console.log('Check run updated.');
+          })
+          console.log('Check run updated.')
       env:
         GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
 
