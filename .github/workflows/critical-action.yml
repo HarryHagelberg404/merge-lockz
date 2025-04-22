@@ -26,6 +26,7 @@ jobs:
           const owner = context.repo.owner;
           const repo = context.repo.repo;
           const currentRunId = context.runId;
+          let concurrentRun = null;
 
           core.info(`Checking for concurrent runs of workflows: ${criticalWorkflowFiles.join(', ')}`);
           core.info(`Current run ID: ${currentRunId}`);
