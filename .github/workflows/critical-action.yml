@@ -113,83 +113,61 @@ jobs:
       if: always() && steps.create_merge_lock.outputs.result
       with:
       script: |
-            // --- CONFIGURATION ---
-            const checkName = 'merge-lock-critical-workflows'; // Ensure this matches Create step & Branch Protection
-            // ---------------------
+        const checkName = 'merge-lock-critical-workflows'; // Ensure this matches Create step & Branch Protection
+        const checkRunId_raw = '${{ steps.create_merge_lock.outputs.result }}';
+        const jobStatus = '${{ job.status }}';
+        const owner = context.repo.owner;
+        const repo = context.repo.repo;
+        core.info(`Update Step: Starting.`);
+        core.info(`Update Step: Received raw checkRunId from create step output: '${checkRunId_raw}'`);
+        core.info(`Update Step: Current job status: '${jobStatus}'`);
+        if (!checkRunId_raw || checkRunId_raw === '' || checkRunId_raw === 'null' || checkRunId_raw === 'undefined') {
+          core.error(`Update Step: FAILURE - Check run ID is missing or invalid ('${checkRunId_raw}'). Cannot release lock.`);
+          core.setFailed("Update Step: Could not retrieve valid check run ID to release the merge lock."); // FAIL THE STEP
+          return;
+        }
+        let parsedId;
+        try {
+          parsedId = parseInt(checkRunId_raw, 10);
+          if (isNaN(parsedId)) {
+            throw new Error(`Parsed checkRunId is NaN.`);
+          }
+          core.info(`Update Step: Successfully parsed checkRunId: ${parsedId}`);
+        } catch (parseError) {
+          core.error(`Update Step: FAILURE - Could not parse checkRunId '${checkRunId_raw}' as an integer: ${parseError.message}`);
+          core.setFailed(`Update Step: Failed to parse checkRunId '${checkRunId_raw}'.`); // FAIL THE STEP
+          return;
+        }
+        const checkConclusion = 'success';
+        const updatePayload = {
+          owner: owner,
+          repo: repo,
+          check_run_id: parsedId,
+          status: 'completed',      // Check is finished
+          conclusion: checkConclusion, // Release the lock
+          output: {
+            title: 'Critical Action Finished',
+            summary: `Workflow '${context.workflow}' completed job with status: ${jobStatus}. Merge lock released.`
+          }
+        };
+        core.info(`Update Step: Attempting to update check run ID ${parsedId} with conclusion '${checkConclusion}'`);
+        try {
+          const response = await github.rest.checks.update(updatePayload);
+          if (response.status !== 200) {
+             throw new Error(`GitHub API returned status ${response.status}, expected 200.`);
+          }
+          core.info(`Update Step: SUCCESS - Check run (ID: ${parsedId}) updated successfully via API. Merge lock should be released.`);
 
-            const checkRunId_raw = '${{ steps.create_merge_lock.outputs.result }}';
-            const jobStatus = '${{ job.status }}';
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-
-            core.info(`Update Step: Starting.`);
-            core.info(`Update Step: Received raw checkRunId from create step output: '${checkRunId_raw}'`);
-            core.info(`Update Step: Current job status: '${jobStatus}'`);
-
-            // --- Rigorous ID Validation ---
-            if (!checkRunId_raw || checkRunId_raw === '' || checkRunId_raw === 'null' || checkRunId_raw === 'undefined') {
-              core.error(`Update Step: FAILURE - Check run ID is missing or invalid ('${checkRunId_raw}'). Cannot release lock.`);
-              core.setFailed("Update Step: Could not retrieve valid check run ID to release the merge lock."); // FAIL THE STEP
-              return;
-            }
-
-            let parsedId;
-            try {
-              parsedId = parseInt(checkRunId_raw, 10);
-              if (isNaN(parsedId)) {
-                // Throw error if parsing results in NaN
-                throw new Error(`Parsed checkRunId is NaN.`);
-              }
-              core.info(`Update Step: Successfully parsed checkRunId: ${parsedId}`);
-            } catch (parseError) {
-              core.error(`Update Step: FAILURE - Could not parse checkRunId '${checkRunId_raw}' as an integer: ${parseError.message}`);
-              core.setFailed(`Update Step: Failed to parse checkRunId '${checkRunId_raw}'.`); // FAIL THE STEP
-              return;
-            }
-
-            // --- Prepare API Call ---
-            // Conclusion is always 'success' to release the lock, regardless of job status
-            const checkConclusion = 'success';
-            const updatePayload = {
-              owner: owner,
-              repo: repo,
-              check_run_id: parsedId,
-              status: 'completed',      // Check is finished
-              conclusion: checkConclusion, // Release the lock
-              output: {
-                title: 'Critical Action Finished',
-                summary: `Workflow '${context.workflow}' completed job with status: ${jobStatus}. Merge lock released.`
-              }
-            };
-
-            core.info(`Update Step: Attempting to update check run ID ${parsedId} with conclusion '${checkConclusion}'`);
-            // console.log("Update Payload:", JSON.stringify(updatePayload, null, 2)); // Uncomment for deep debug
-
-            // --- Execute API Call with Strict Error Handling ---
-            try {
-              const response = await github.rest.checks.update(updatePayload);
-
-              // Explicitly check API response status
-              if (response.status !== 200) {
-                 // Throw an error if the API didn't return success (HTTP 200 OK)
-                 throw new Error(`GitHub API returned status ${response.status}, expected 200.`);
-              }
-
-              // If we reach here, the API call was successful
-              core.info(`Update Step: SUCCESS - Check run (ID: ${parsedId}) updated successfully via API. Merge lock should be released.`);
-
-            } catch (error) {
-              core.error(`!!!! Update Step: FAILURE - Caught error during checks.update API call for ID ${parsedId} !!!!`);
-              core.error(`Update Step: Error Message: ${error.message}`);
-              if (error.status) {
-                  core.error(`Update Step: HTTP Status Code: ${error.status}`); // Log HTTP status if available from the error object
-              }
-              // Log the response data if available in the error (sometimes contains useful details)
-              if (error.response && error.response.data) {
-                  core.error(`Update Step: API Response Data: ${JSON.stringify(error.response.data)}`);
-              }
-              // Explicitly FAIL the step when the API call fails
-              core.setFailed(`Update Step: Failed to release merge lock via checks.update API: ${error.message}`);
-            }
+        } catch (error) {
+          core.error(`!!!! Update Step: FAILURE - Caught error during checks.update API call for ID ${parsedId} !!!!`);
+          core.error(`Update Step: Error Message: ${error.message}`);
+          if (error.status) {
+              core.error(`Update Step: HTTP Status Code: ${error.status}`); // Log HTTP status if available from the error object
+          }
+          if (error.response && error.response.data) {
+              core.error(`Update Step: API Response Data: ${JSON.stringify(error.response.data)}`);
+          }
+          core.setFailed(`Update Step: Failed to release merge lock via checks.update API: ${error.message}`);
+        }
       env:
         GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
