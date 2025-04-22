@@ -5,7 +5,7 @@ on:
 
 permissions:
   checks: write
-  actions: [ read, write ]
+  actions: write
   contents: read
 
 jobs:
