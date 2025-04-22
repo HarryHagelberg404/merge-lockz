@@ -2,6 +2,8 @@ name: critical-action
 
 on:
   workflow_dispatch:
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   checks: write
