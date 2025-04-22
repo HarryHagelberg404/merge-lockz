@@ -17,7 +17,7 @@ permissions:
 jobs:
   merge_gate_check:
     runs-on: ubuntu-latest
-    environment: Merge Gate Production
+    environment: Merge Gate master
 
     steps:
       - name: Evaluate Gate Action
