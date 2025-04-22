@@ -102,7 +102,7 @@ jobs:
       run: |
         echo "Workflow paused for 60 seconds."
         echo "Go to a Pull Request targeting the protected branch."
-        echo "The 'merge-lock-critical-workflows' status check should be yellow (pending)."
+        echo "The 'merge-lock-critical-workflow' status check should be yellow (pending)."
         echo "The merge button should be disabled or indicate the check needs to pass."
         sleep 20
         echo "Resuming workflow..."
