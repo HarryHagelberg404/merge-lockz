@@ -1,4 +1,4 @@
-name: clear-merge-lock
+name: set-merge-lock
 
 on:
   workflow_dispatch:
