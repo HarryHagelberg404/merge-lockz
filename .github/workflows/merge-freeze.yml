@@ -12,44 +12,17 @@ jobs:
   lock-and-wait:
     runs-on: ubuntu-latest
     steps:
-      - name: Save current protection rules
-        id: get-protection
-        env:
-          GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          BRANCH: ${{ github.event.inputs.branch }}
-        run: |
-          curl -sSL \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/$REPO/branches/$BRANCH/protection |
-          jq '{
-            required_status_checks,
-            enforce_admins: .enforce_admins.enabled,
-            required_pull_request_reviews,
-            restrictions,
-            allow_force_pushes: .allow_force_pushes.enabled,
-            allow_deletions: .allow_deletions.enabled
-          }' > original_protection.json
-          echo "✅ Cleaned and saved original protection"
-
       - name: Apply temporary lock
         env:
           GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          curl -X PUT \
+          curl -X PATCH \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/$REPO/branches/$BRANCH/protection \
-            -d '{
-              "required_pull_request_reviews": {
-                "dismiss_stale_reviews": false,
-                "require_code_owner_reviews": false,
-                "required_approving_review_count": 6
-              }
-            }'
+            https://api.github.com/repos/$REPO/branches/$BRANCH/protection/required_pull_request_reviews \
+            -d "{\"required_approving_review_count\": 6}"
               #-d '{
               #"required_status_checks": {
                 #"strict": true,
@@ -75,10 +48,10 @@ jobs:
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          curl -X PUT \
+          curl -X PATCH \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            --data-binary @original_protection.json \
-            https://api.github.com/repos/$REPO/branches/$BRANCH/protection
+            https://api.github.com/repos/$REPO/branches/$BRANCH/protection/required_pull_request_reviews \
+            -d "{\"required_approving_review_count\": 1}"
           echo "🔓 Original protection restored."
 
