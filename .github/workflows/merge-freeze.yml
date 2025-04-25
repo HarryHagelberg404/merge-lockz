@@ -19,11 +19,19 @@ jobs:
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          curl -s -H "Authorization: token $GH_TOKEN" \
-               -H "Accept: application/vnd.github+json" \
-               https://api.github.com/repos/$REPO/branches/$BRANCH/protection \
-               -o original_protection.json
-          echo "Saved current protection to file."
+          curl -sSL \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$REPO/branches/$BRANCH/protection |
+          jq '{
+            required_status_checks,
+            enforce_admins: .enforce_admins.enabled,
+            required_pull_request_reviews,
+            restrictions,
+            allow_force_pushes: .allow_force_pushes.enabled,
+            allow_deletions: .allow_deletions.enabled
+          }' > original_protection.json
+          echo "✅ Cleaned and saved original protection"
 
       - name: Apply temporary lock
         env:
@@ -36,12 +44,19 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/$REPO/branches/$BRANCH/protection \
             -d '{
-              "required_status_checks": null,
+              "required_status_checks": {
+                "strict": true,
+                "contexts": []
+              },
               "enforce_admins": false,
               "required_pull_request_reviews": {
+                "dismiss_stale_reviews": false,
+                "require_code_owner_reviews": false,
                 "required_approving_review_count": 99
               },
-              "restrictions": null
+              "restrictions": null,
+              "allow_force_pushes": false,
+              "allow_deletions": false
             }'
           echo "✅ Applied temporary lock (requires 99 reviews, disables admin override)."
 
