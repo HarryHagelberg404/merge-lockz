@@ -1,115 +1,48 @@
-name: Merge Lock API
+name: Lock Branch and Sleep
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read # Example, needed for checkout
+    inputs:
+      branch:
+        description: 'Branch to lock'
+        required: true
+        default: 'main'
 
 jobs:
-  lock_run_unlock:
+  lock-branch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Lock Branch
+      - name: Lock branch using GitHub API
         env:
           GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          BRANCH_NAME: main # Or your target branch
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          echo "Attempting to lock branch: $BRANCH_NAME"
-
-          # Construct the JSON payload explicitly
-          # Note: true, false, null are NOT quoted in JSON
-          JSON_PAYLOAD=$(cat <<EOF
-          {
-            "required_status_checks": null,
-            "enforce_admins": true,
-            "required_pull_request_reviews": null,
-            "restrictions": null,
-            "allow_force_pushes": false,
-            "allow_deletions": false,
-            "block_creations": false,
-            "required_linear_history": false,
-            "required_conversation_resolution": false,
-            "lock_branch": true
-          }
-          EOF
-          )
-
-          # Send the JSON payload using --input -
-          echo "$JSON_PAYLOAD" | gh api \
-            --method PUT "/repos/$REPO_OWNER/$REPO_NAME/branches/$BRANCH_NAME/protection" \
+          curl -X PUT \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            --input - \
-            --silent || { echo "Failed to lock branch"; exit 1; }
+            https://api.github.com/repos/$REPO/branches/$BRANCH/protection \
+            -d '{
+              "required_status_checks": null,
+              "enforce_admins": true,
+              "required_pull_request_reviews": null,
+              "restrictions": null
+            }'
+          echo "Branch $BRANCH locked."
 
-          echo "Branch $BRANCH_NAME locked."
+      - name: Sleep for 20 seconds
+        run: sleep 20
 
-      - name: Run Critical Task
-        id: critical_task
-        run: |
-          echo "Running the important process on locked branch..."
-          sleep 30
-          echo "Process finished!"
-
-      - name: Unlock Branch
+      - name: Unlock branch using GitHub API
         if: always()
         env:
           GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          BRANCH_NAME: main
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          echo "Attempting to unlock branch: $BRANCH_NAME"
-
-          # 1. Get the current protection settings
-          #    Remove --silent. Redirect stderr to avoid gh error messages in the variable.
-          CURRENT_PROTECTION=$(gh api \
-            --method GET "/repos/$REPO_OWNER/$REPO_NAME/branches/$BRANCH_NAME/protection" \
+          curl -X DELETE \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            --jq . 2>/dev/null) # Capture stdout, discard stderr
-
-          # Check the exit status ($?) of the gh api command *immediately* after running it
-          GH_EXIT_CODE=$?
-          if [[ $GH_EXIT_CODE -ne 0 ]]; then
-            echo "Failed to get current protection settings (gh api exit code: $GH_EXIT_CODE)."
-            echo "Branch might not be protected, permissions issue, or other API error. Skipping unlock."
-            # Decide if this is a failure (exit 1) or acceptable (exit 0)
-            exit 0 # Exiting gracefully as there might be nothing to unlock
-          fi
-
-          # Also check if the output is empty, even if the command succeeded (unlikely with --jq .)
-          if [[ -z "$CURRENT_PROTECTION" ]]; then
-             echo "Received empty response when getting protection settings, though command succeeded. Skipping unlock."
-             exit 0
-          fi
-
-          # 2. Modify only the lock_branch field using jq
-          #    Add error handling for jq itself in case CURRENT_PROTECTION is unexpectedly bad
-          UPDATED_PROTECTION=$(echo "$CURRENT_PROTECTION" | jq '.lock_branch = false')
-          JQ_EXIT_CODE=$?
-          if [[ $JQ_EXIT_CODE -ne 0 ]]; then
-             echo "Failed to modify protection settings using jq (exit code: $JQ_EXIT_CODE)."
-             echo "Input JSON may have been invalid:"
-             # Be cautious logging potentially sensitive data, but useful for debug
-             # echo "$CURRENT_PROTECTION"
-             exit 1 # This is likely a script error if gh succeeded but jq failed
-          fi
-
-          # 3. Send the modified full configuration back
-          #    Using --silent here is fine as we only care about success/failure via exit code
-          echo "$UPDATED_PROTECTION" | gh api \
-            --method PUT "/repos/$REPO_OWNER/$REPO_NAME/branches/$BRANCH_NAME/protection" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            --input - \
-            --silent || { echo "Failed to unlock branch - MANUAL INTERVENTION MAY BE REQUIRED"; exit 1; }
-
-          echo "Branch $BRANCH_NAME unlocked."
+            https://api.github.com/repos/$REPO/branches/$BRANCH/protection
+          echo "Branch $BRANCH unlocked."
 
