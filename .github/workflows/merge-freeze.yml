@@ -18,7 +18,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           RUNNING=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/$REPO/actions/workflows/temp-lock.yml/runs?status=in_progress" | jq '.total_count')
+            "https://api.github.com/repos/$REPO/actions/workflows/merge-freeze.yml/runs?status=in_progress" | jq '.total_count')
 
           if [ "$RUNNING" -gt 0 ]; then
             echo "❌ temp-lock.yml is already running. Aborting..."
