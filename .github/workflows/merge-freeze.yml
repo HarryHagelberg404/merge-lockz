@@ -86,7 +86,6 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             --jq . \
-            --silent || echo "Failed to get current protection settings. Maybe none exist?")
 
           if [[ -z "$CURRENT_PROTECTION" || "$CURRENT_PROTECTION" == "null" ]]; then
             echo "No existing protection rules found or failed to fetch. Skipping unlock."
@@ -98,6 +97,5 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             --input - \
-            --silent || { echo "Failed to unlock branch - MANUAL INTERVENTION MAY BE REQUIRED"; exit 1; } # Exit if unlock fails
 
           echo "Branch $BRANCH_NAME unlocked."
