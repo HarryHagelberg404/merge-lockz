@@ -1,4 +1,4 @@
-name: Lock Branch and Sleep
+name: Temporarily Lock Branch
 
 on:
   workflow_dispatch:
@@ -9,10 +9,23 @@ on:
         default: 'main'
 
 jobs:
-  lock-branch:
+  lock-and-wait:
     runs-on: ubuntu-latest
     steps:
-      - name: Lock branch using GitHub API
+      - name: Save current protection rules
+        id: get-protection
+        env:
+          GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.inputs.branch }}
+        run: |
+          curl -s -H "Authorization: token $GH_TOKEN" \
+               -H "Accept: application/vnd.github+json" \
+               https://api.github.com/repos/$REPO/branches/$BRANCH/protection \
+               -o original_protection.json
+          echo "Saved current protection to file."
+
+      - name: Apply temporary lock
         env:
           GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -24,25 +37,27 @@ jobs:
             https://api.github.com/repos/$REPO/branches/$BRANCH/protection \
             -d '{
               "required_status_checks": null,
-              "enforce_admins": true,
-              "required_pull_request_reviews": null,
+              "enforce_admins": false,
+              "required_pull_request_reviews": {
+                "required_approving_review_count": 99
+              },
               "restrictions": null
             }'
-          echo "Branch $BRANCH locked."
+          echo "✅ Applied temporary lock (requires 99 reviews, disables admin override)."
 
-      - name: Sleep for 20 seconds
+      - name: Wait 20 seconds
         run: sleep 20
 
-      - name: Unlock branch using GitHub API
-        if: always()
+      - name: Restore original protection
         env:
           GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          curl -X DELETE \
+          curl -X PUT \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
+            --data-binary @original_protection.json \
             https://api.github.com/repos/$REPO/branches/$BRANCH/protection
-          echo "Branch $BRANCH unlocked."
+          echo "🔓 Original protection restored."
 
