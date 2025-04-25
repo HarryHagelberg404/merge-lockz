@@ -12,6 +12,20 @@ jobs:
   lock-and-wait:
     runs-on: ubuntu-latest
     steps:
+      - name: Fail if "temp-lock.yml" is already running
+        env:
+          GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          RUNNING=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/actions/workflows/temp-lock.yml/runs?status=in_progress" | jq '.total_count')
+
+          if [ "$RUNNING" -gt 0 ]; then
+            echo "❌ temp-lock.yml is already running. Aborting..."
+            exit 1
+          else
+            echo "✅ temp-lock.yml is not running. Proceeding..."
+          fi
       - name: Apply temporary lock
         env:
           GH_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
